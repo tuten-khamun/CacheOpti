@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CacheOpti — Performance Engineering & Observability Lab</title>
+  
+  <!-- Modern Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Custom Styles -->
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="bg-[#090d16] text-slate-100 min-h-screen flex flex-col">
+
+  <!-- Top App Navigation & HUD -->
+  <header class="border-b border-slate-800 bg-[#0d1322]/90 backdrop-blur-md sticky top-0 z-50 px-6 py-3.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      
+      <!-- Brand & Status -->
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center shadow-lg shadow-cyan-500/20">
+          <span class="text-white font-bold text-lg">⚡</span>
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight text-white">CacheOpti</h1>
+            <span class="text-[10px] font-semibold uppercase px-2 py-0.5 rounded bg-cyan-950/80 text-cyan-400 border border-cyan-800/60">Lab v1.0</span>
+          </div>
+          <p class="text-xs text-slate-400">High-Performance Observable Caching Studio</p>
+        </div>
+      </div>
+
+      <!-- Live Quick KPI Bar -->
+      <div class="flex items-center gap-3">
+        <!-- Hit Rate KPI -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-1.5 flex items-center gap-2.5">
+          <span class="text-xs text-slate-400 font-medium">Hit Rate</span>
+          <span id="kpi-hit-rate" class="mono font-bold text-sm text-emerald-400">0.0%</span>
+        </div>
+
+        <!-- Occupancy Gauge -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-1.5 flex items-center gap-2.5">
+          <span class="text-xs text-slate-400 font-medium">Occupancy</span>
+          <span id="kpi-occupancy" class="mono font-bold text-sm text-cyan-400">0 / 6</span>
+        </div>
+
+        <!-- Avoided Network Calls -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-lg px-3 py-1.5 flex items-center gap-2.5">
+          <span class="text-xs text-slate-400 font-medium">Reqs Avoided</span>
+          <span id="kpi-avoided" class="mono font-bold text-sm text-purple-400">0</span>
+        </div>
+
+        <!-- Clear Cache Button -->
+        <button id="btn-clear-cache" onclick="clearCache()" class="text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 px-3 py-1.5 rounded-lg font-medium transition flex items-center gap-1.5">
+          <span>🗑️</span> Clear Cache
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="max-w-7xl mx-auto mt-3 flex items-center gap-1 overflow-x-auto border-t border-slate-800/80 pt-2 text-xs font-medium">
+      <button onclick="switchTab('inspector')" id="tab-inspector" class="tab-btn active px-4 py-2 rounded-t-md text-slate-300 hover:text-white transition">
+        🔍 Cache Inspector & DLL Visualizer
+      </button>
+      <button onclick="switchTab('explorer')" id="tab-explorer" class="tab-btn px-4 py-2 rounded-t-md text-slate-300 hover:text-white transition">
+        🌍 Country Explorer (Live API)
+      </button>
+      <button onclick="switchTab('benchmark')" id="tab-benchmark" class="tab-btn px-4 py-2 rounded-t-md text-slate-300 hover:text-white transition">
+        📊 Benchmark Lab
+      </button>
+      <button onclick="switchTab('simulator')" id="tab-simulator" class="tab-btn px-4 py-2 rounded-t-md text-slate-300 hover:text-white transition">
+        🎮 Workload Step-by-Step Simulator
+      </button>
+      <button onclick="switchTab('settings')" id="tab-settings" class="tab-btn px-4 py-2 rounded-t-md text-slate-300 hover:text-white transition">
+        ⚙️ Settings & API Key
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="max-w-7xl mx-auto w-full flex-1 p-6 space-y-6">
+
+    <!-- ========================================== -->
+    <!-- TAB 1: CACHE INSPECTOR & DLL VISUALIZER   -->
+    <!-- ========================================== -->
+    <section id="panel-inspector" class="space-y-6">
+      
+      <!-- Doubly Linked List Visualizer Card -->
+      <div class="card p-5 space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-base font-semibold text-white flex items-center gap-2">
+              <span>🔗</span> Doubly Linked List & Hash Map Memory Visualizer
+            </h2>
+            <p class="text-xs text-slate-400 mt-0.5">
+              Entries are arranged in order of eviction priority. <span class="text-cyan-400 font-medium">Left is Most Recently Used (MRU)</span>, <span class="text-rose-400 font-medium">Right is Least Recently Used (LRU)</span>.
+            </p>
+          </div>
+          <div class="flex items-center gap-2 text-xs">
+            <span class="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800">Policy: <b id="lbl-active-policy">LRU</b></span>
+            <span class="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">Capacity: <b id="lbl-active-cap">6</b></span>
+          </div>
+        </div>
+
+        <!-- Visual Pointer Track -->
+        <div id="dll-container" class="min-h-[140px] bg-[#0c1220] border border-slate-800/80 rounded-xl p-4 flex items-center gap-1 overflow-x-auto">
+          <!-- Dynamic Nodes Rendered by app.js -->
+        </div>
+
+        <!-- Legend -->
+        <div class="flex flex-wrap items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-800/80">
+          <div class="flex items-center gap-4">
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span> Head / MRU Node (Safest from eviction)</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-400"></span> Tail / LRU Node (Next candidate to be evicted)</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span> Valid Active TTL</span>
+            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400"></span> Expired (Pending sweep)</span>
+          </div>
+          <div class="mono text-slate-500">
+            Hash Map: O(1) Lookup | Doubly Linked List: O(1) Reposition & Evict
+          </div>
+        </div>
+      </div>
+
+      <!-- Telemetry Counters & Audit Event Log Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        
+        <!-- Engine Telemetry Overview -->
+        <div class="card p-5 space-y-4">
+          <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+            <span>📈</span> Engine Telemetry & Health
+          </h3>
+          <div class="space-y-2.5 text-xs">
+            <div class="flex justify-between items-center py-1 border-b border-slate-800/80">
+              <span class="text-slate-400">Total Lookups</span>
+              <span id="stat-lookups" class="mono font-semibold text-white">0</span>
+            </div>
+            <div class="flex justify-between items-center py-1 border-b border-slate-800/80">
+              <span class="text-slate-400">Cache Hits</span>
+              <span id="stat-hits" class="mono font-semibold text-emerald-400">0</span>
+            </div>
+            <div class="flex justify-between items-center py-1 border-b border-slate-800/80">
+              <span class="text-slate-400">Cache Misses</span>
+              <span id="stat-misses" class="mono font-semibold text-amber-400">0</span>
+            </div>
+            <div class="flex justify-between items-center py-1 border-b border-slate-800/80">
+              <span class="text-slate-400">Capacity Evictions</span>
+              <span id="stat-evictions" class="mono font-semibold text-rose-400">0</span>
+            </div>
+            <div class="flex justify-between items-center py-1 border-b border-slate-800/80">
+              <span class="text-slate-400">TTL Expirations</span>
+              <span id="stat-expirations" class="mono font-semibold text-purple-400">0</span>
+            </div>
+            <div class="flex justify-between items-center py-1 border-b border-slate-800/80">
+              <span class="text-slate-400">Avg Lookup Overhead</span>
+              <span id="stat-overhead" class="mono font-semibold text-cyan-300">0.000 μs</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Live Event Audit Log -->
+        <div class="card p-5 lg:col-span-2 space-y-3 flex flex-col">
+          <div class="flex items-center justify-between">
+            <h3 class="text-sm font-semibold text-white flex items-center gap-2">
+              <span>📜</span> Live Operational Event Audit Stream
+            </h3>
+            <span class="text-[10px] mono text-slate-500">Auto-updating live</span>
+          </div>
+          <div id="event-log-container" class="flex-1 min-h-[220px] max-h-[260px] overflow-y-auto bg-[#0a0e1a] border border-slate-800 rounded-lg p-3 space-y-1.5 mono text-xs">
+            <div class="text-slate-600 italic">No events logged yet. Perform operations to observe events.</div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 2: COUNTRY EXPLORER (LIVE REST API)    -->
+    <!-- ========================================== -->
+    <section id="panel-explorer" class="space-y-6 hidden">
+      
+      <div class="card p-5 space-y-4">
+        <div>
+          <h2 class="text-base font-semibold text-white flex items-center gap-2">
+            <span>🌍</span> Real-World API Accelerator: REST Countries
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Demonstrates real external HTTP network calls vs accelerated memory cache lookups.
+            Observe the dramatic difference between network I/O latency (typically 100-500 ms) and cache hit retrieval (&lt; 0.05 ms).
+          </p>
+        </div>
+
+        <!-- Search Controls -->
+        <div class="flex flex-wrap items-center gap-3">
+          <div class="flex-1 min-w-[260px] relative">
+            <input id="input-country-search" type="text" placeholder="Search country (e.g. France, Japan, Germany)..." 
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition"
+              onkeydown="if(event.key==='Enter') executeCountrySearch()">
+          </div>
+
+          <!-- Use Cache Toggle -->
+          <label class="flex items-center gap-2 bg-slate-900 border border-slate-700 px-3.5 py-2.5 rounded-lg text-xs cursor-pointer select-none">
+            <input id="chk-use-cache" type="checkbox" checked class="w-4 h-4 accent-cyan-500 rounded">
+            <span class="text-slate-300">Enable Cache Acceleration</span>
+          </label>
+
+          <button onclick="executeCountrySearch()" class="bg-cyan-600 hover:bg-cyan-500 text-white font-medium px-5 py-2.5 rounded-lg text-sm shadow-md shadow-cyan-600/20 transition flex items-center gap-2">
+            <span>Fetch Country</span>
+          </button>
+        </div>
+
+        <!-- Quick Sample Chips -->
+        <div class="flex flex-wrap items-center gap-2 pt-1">
+          <span class="text-xs text-slate-400">Quick Test Samples:</span>
+          <button onclick="quickCountry('France')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">🇫🇷 France</button>
+          <button onclick="quickCountry('Japan')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">🇯🇵 Japan</button>
+          <button onclick="quickCountry('Brazil')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">🇧🇷 Brazil</button>
+          <button onclick="quickCountry('India')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">🇮🇳 India</button>
+          <button onclick="quickCountry('Canada')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">🇨🇦 Canada</button>
+          <button onclick="quickCountry('Germany')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">🇩🇪 Germany</button>
+          <button onclick="quickCountry('Egypt')" class="px-2.5 py-1 rounded-md bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 border border-slate-700 transition">🇪🇬 Egypt</button>
+        </div>
+      </div>
+
+      <!-- Execution Result & Latency Waterfall Card -->
+      <div id="country-result-card" class="card p-5 space-y-5 hidden">
+        
+        <!-- Header with Source Badge & Timing -->
+        <div class="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
+          <div class="flex items-center gap-3">
+            <span id="country-flag-icon" class="text-3xl">🌐</span>
+            <div>
+              <div class="flex items-center gap-2">
+                <h3 id="country-name-title" class="text-lg font-bold text-white">Country Name</h3>
+                <span id="country-source-badge" class="text-xs px-2.5 py-0.5 rounded font-medium badge-hit">CACHE HIT</span>
+              </div>
+              <p id="country-official-name" class="text-xs text-slate-400">Official Name</p>
+            </div>
+          </div>
+
+          <div class="text-right">
+            <div class="text-xs text-slate-400">Observed Latency</div>
+            <div id="country-latency-val" class="mono text-xl font-bold text-cyan-400">0.00 ms</div>
+          </div>
+        </div>
+
+        <!-- Latency Breakdown & Waterfall Visualizer -->
+        <div class="space-y-2 bg-[#0c1220] p-4 rounded-xl border border-slate-800">
+          <div class="flex justify-between text-xs text-slate-400">
+            <span>Latency Breakdown Waterfall</span>
+            <span id="country-speedup-badge" class="mono text-emerald-400 font-semibold">1x</span>
+          </div>
+
+          <!-- Dual-segment Visual Waterfall Bar -->
+          <div class="waterfall-track">
+            <div id="bar-waterfall-net" class="waterfall-net" style="width: 100%;"></div>
+            <div id="bar-waterfall-cache" class="waterfall-cache" style="width: 0%;"></div>
+          </div>
+
+          <div class="flex justify-between text-[11px] mono text-slate-400 pt-1">
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-amber-500"></span> External Network I/O: <b id="lbl-net-time">0 ms</b></span>
+            <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded bg-cyan-400"></span> Cache Lookup Overhead: <b id="lbl-cache-time">0 μs</b></span>
+          </div>
+        </div>
+
+        <!-- Country Details Data Grid -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs">
+          <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800/80">
+            <span class="text-slate-400 block text-[11px]">Capital</span>
+            <span id="val-capital" class="font-semibold text-slate-200 mt-1 block">-</span>
+          </div>
+          <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800/80">
+            <span class="text-slate-400 block text-[11px]">Region / Subregion</span>
+            <span id="val-region" class="font-semibold text-slate-200 mt-1 block">-</span>
+          </div>
+          <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800/80">
+            <span class="text-slate-400 block text-[11px]">Population</span>
+            <span id="val-population" class="font-semibold text-slate-200 mt-1 block">-</span>
+          </div>
+          <div class="bg-slate-900/60 p-3 rounded-lg border border-slate-800/80">
+            <span class="text-slate-400 block text-[11px]">Currencies</span>
+            <span id="val-currencies" class="font-semibold text-slate-200 mt-1 block">-</span>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 3: BENCHMARK LAB                       -->
+    <!-- ========================================== -->
+    <section id="panel-benchmark" class="space-y-6 hidden">
+      
+      <!-- Experiment Setup Card -->
+      <div class="card p-5 space-y-4">
+        <div>
+          <h2 class="text-base font-semibold text-white flex items-center gap-2">
+            <span>📊</span> Comparative Benchmark & Parametric Lab
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Run side-by-side controlled workloads comparing <b>Uncached Baseline</b> vs <b>Cached Execution</b>.
+            Measures speedup factors, median latency, and capacity sweep curves under realistic distributions.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs">
+          <!-- Workload Distribution -->
+          <div>
+            <label class="block text-slate-400 font-medium mb-1">Workload Distribution</label>
+            <select id="bench-workload" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs">
+              <option value="zipfian">Zipfian (80/20 Power-Law Popularity)</option>
+              <option value="uniform">Uniform Random</option>
+              <option value="cyclic">Cyclic (Sequential Loops)</option>
+              <option value="thrash">Cache Thrashing (Overflow Capacity)</option>
+            </select>
+          </div>
+
+          <!-- Total Requests -->
+          <div>
+            <label class="block text-slate-400 font-medium mb-1">Total Operations</label>
+            <input id="bench-ops" type="number" min="10" max="200" value="60" 
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs">
+          </div>
+
+          <!-- Cache Capacity -->
+          <div>
+            <label class="block text-slate-400 font-medium mb-1">Cache Capacity</label>
+            <input id="bench-cap" type="number" min="1" max="50" value="6" 
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-xs">
+          </div>
+
+          <!-- Run Button -->
+          <div class="flex items-end">
+            <button onclick="runBenchmark()" id="btn-run-benchmark" class="w-full bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-semibold py-2 px-4 rounded-lg shadow-md transition flex items-center justify-center gap-2">
+              <span>🚀 Run Experiment</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Benchmark Results Dashboard -->
+      <div id="bench-results-container" class="space-y-6 hidden">
+        
+        <!-- Comparative KPI Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div class="card p-4">
+            <span class="text-xs text-slate-400 block">Observed Speedup</span>
+            <div id="res-speedup" class="mono text-2xl font-bold text-emerald-400 mt-1">0.0x</div>
+            <span class="text-[10px] text-slate-500 mt-0.5 block">Faster via Cache</span>
+          </div>
+
+          <div class="card p-4">
+            <span class="text-xs text-slate-400 block">Time Saved</span>
+            <div id="res-saved" class="mono text-2xl font-bold text-cyan-400 mt-1">0 ms</div>
+            <span class="text-[10px] text-slate-500 mt-0.5 block">Net CPU/IO spared</span>
+          </div>
+
+          <div class="card p-4">
+            <span class="text-xs text-slate-400 block">Measured Hit Rate</span>
+            <div id="res-hit-rate" class="mono text-2xl font-bold text-purple-400 mt-1">0.0%</div>
+            <span id="res-hit-count" class="text-[10px] text-slate-500 mt-0.5 block">0 hits / 0 misses</span>
+          </div>
+
+          <div class="card p-4">
+            <span class="text-xs text-slate-400 block">Lookup Overhead</span>
+            <div id="res-overhead" class="mono text-2xl font-bold text-slate-200 mt-1">0.0 μs</div>
+            <span class="text-[10px] text-slate-500 mt-0.5 block">Average hash check</span>
+          </div>
+        </div>
+
+        <!-- Side-by-Side Detailed Stats Table -->
+        <div class="card p-5 space-y-3">
+          <h3 class="text-sm font-semibold text-white">Statistical Latency Distribution (Defensible Methodology)</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left text-xs mono">
+              <thead>
+                <tr class="border-b border-slate-800 text-slate-400">
+                  <th class="py-2">Metric</th>
+                  <th class="py-2 text-rose-400">Uncached Baseline</th>
+                  <th class="py-2 text-cyan-400">Cached Execution</th>
+                  <th class="py-2 text-emerald-400">Improvement</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-800/60 text-slate-300">
+                <tr>
+                  <td class="py-2 font-medium">Total Duration</td>
+                  <td id="tbl-uncached-total" class="py-2">-</td>
+                  <td id="tbl-cached-total" class="py-2">-</td>
+                  <td id="tbl-diff-total" class="py-2 text-emerald-400 font-bold">-</td>
+                </tr>
+                <tr>
+                  <td class="py-2 font-medium">Mean (Average) Latency</td>
+                  <td id="tbl-uncached-mean" class="py-2">-</td>
+                  <td id="tbl-cached-mean" class="py-2">-</td>
+                  <td id="tbl-diff-mean" class="py-2 text-emerald-400 font-bold">-</td>
+                </tr>
+                <tr>
+                  <td class="py-2 font-medium">Median (p50) Latency</td>
+                  <td id="tbl-uncached-median" class="py-2">-</td>
+                  <td id="tbl-cached-median" class="py-2">-</td>
+                  <td id="tbl-diff-median" class="py-2 text-emerald-400 font-bold">-</td>
+                </tr>
+                <tr>
+                  <td class="py-2 font-medium">95th Percentile (p95)</td>
+                  <td id="tbl-uncached-p95" class="py-2">-</td>
+                  <td id="tbl-cached-p95" class="py-2">-</td>
+                  <td id="tbl-diff-p95" class="py-2 text-emerald-400 font-bold">-</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Interactive Charts Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="card p-5 space-y-3">
+            <h4 class="text-xs font-semibold text-slate-300">Latency Profile: Uncached vs Cached Samples</h4>
+            <div class="h-64">
+              <canvas id="chart-latency"></canvas>
+            </div>
+          </div>
+
+          <div class="card p-5 space-y-3">
+            <h4 class="text-xs font-semibold text-slate-300">Capacity Sweep: Hit Rate vs Cache Size</h4>
+            <div class="h-64">
+              <canvas id="chart-sweep"></canvas>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 4: WORKLOAD STEP-BY-STEP SIMULATOR    -->
+    <!-- ========================================== -->
+    <section id="panel-simulator" class="space-y-6 hidden">
+      
+      <div class="card p-5 space-y-4">
+        <div>
+          <h2 class="text-base font-semibold text-white flex items-center gap-2">
+            <span>🎮</span> Interactive Step-by-Step Caching Simulator
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Step through a sequence of requests one-by-one to visualize exactly how entries enter the cache, get promoted to the Head on hits, or get evicted from the Tail when capacity is reached.
+          </p>
+        </div>
+
+        <!-- Workload Sequence Track -->
+        <div class="space-y-2">
+          <span class="text-xs text-slate-400 font-medium">Workload Sequence:</span>
+          <div id="sim-sequence-track" class="flex flex-wrap items-center gap-2 bg-[#0c1220] p-3 rounded-lg border border-slate-800 mono text-xs">
+            <!-- Rendered by app.js -->
+          </div>
+        </div>
+
+        <!-- Controls -->
+        <div class="flex items-center gap-3 pt-2">
+          <button onclick="simStep()" class="bg-cyan-600 hover:bg-cyan-500 text-white font-semibold px-4 py-2 rounded-lg text-xs transition flex items-center gap-2">
+            <span>▶️ Next Access</span>
+          </button>
+          <button onclick="simAutoPlay()" id="btn-sim-auto" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold px-4 py-2 rounded-lg text-xs transition">
+            🔄 Auto Play
+          </button>
+          <button onclick="simReset()" class="bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold px-4 py-2 rounded-lg text-xs transition">
+            ↺ Reset
+          </button>
+        </div>
+      </div>
+
+      <!-- Simulator Action Explanation Box -->
+      <div id="sim-action-box" class="card p-5 space-y-2 bg-gradient-to-r from-slate-900 to-[#10192e]">
+        <span class="text-xs text-slate-400 font-medium">Step Action & Mechanical Explanation:</span>
+        <div id="sim-explanation-text" class="text-sm font-medium text-slate-200">
+          Click "Next Access" to begin stepping through the workload sequence.
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- TAB 5: SETTINGS & DYNAMIC API KEY         -->
+    <!-- ========================================== -->
+    <section id="panel-settings" class="space-y-6 hidden">
+      
+      <div class="card p-5 space-y-5 max-w-2xl">
+        <div>
+          <h2 class="text-base font-semibold text-white flex items-center gap-2">
+            <span>⚙️</span> Engine Configuration & Authentication
+          </h2>
+          <p class="text-xs text-slate-400 mt-0.5">
+            Configure cache capacity, default TTL expiration, eviction policies, and optional external API keys.
+          </p>
+        </div>
+
+        <div class="space-y-4 text-xs">
+          <!-- Capacity -->
+          <div>
+            <label class="block text-slate-300 font-medium mb-1">Cache Capacity (Max Entries in Storage)</label>
+            <input id="cfg-capacity" type="number" min="1" max="100" value="6" 
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
+            <span class="text-slate-500 text-[11px] mt-0.5 block">When this limit is exceeded, eviction occurs.</span>
+          </div>
+
+          <!-- TTL -->
+          <div>
+            <label class="block text-slate-300 font-medium mb-1">Default Time-To-Live (Seconds)</label>
+            <input id="cfg-ttl" type="number" min="1" max="3600" value="30" 
+              class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
+            <span class="text-slate-500 text-[11px] mt-0.5 block">Entries older than this duration are automatically purged on access.</span>
+          </div>
+
+          <!-- Policy -->
+          <div>
+            <label class="block text-slate-300 font-medium mb-1">Eviction Policy</label>
+            <select id="cfg-policy" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
+              <option value="LRU">LRU (Least Recently Used) — Recommended</option>
+              <option value="FIFO">FIFO (First In, First Out)</option>
+              <option value="LFU">LFU (Least Frequently Used)</option>
+            </select>
+          </div>
+
+          <!-- Dynamic API Key Section -->
+          <div class="pt-3 border-t border-slate-800 space-y-3">
+            <div class="flex items-center justify-between">
+              <label class="block text-slate-300 font-medium">Optional REST API Key / Token</label>
+              <span class="text-[10px] text-cyan-400">Works with or without keys</span>
+            </div>
+            
+            <div class="relative">
+              <input id="cfg-api-key" type="password" placeholder="Enter optional API key or Bearer token..."
+                class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white pr-10">
+              <button type="button" onclick="toggleApiKeyVisibility()" class="absolute right-3 top-2.5 text-slate-400 hover:text-white">
+                <span id="eye-icon">👁️</span>
+              </button>
+            </div>
+            <p class="text-slate-500 text-[11px]">
+              Note: The public REST Countries API v3.1 requires <b>no API key</b>. However, if you are using an authenticated gateway or proxy, enter your key above. Keys are sanitized and never logged or exposed in cache keys.
+            </p>
+
+            <div>
+              <label class="block text-slate-300 font-medium mb-1">Authentication Mode</label>
+              <select id="cfg-auth-type" class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
+                <option value="auto">Auto-Detect (None for public REST Countries)</option>
+                <option value="header">Custom Header (X-API-Key: {key})</option>
+                <option value="bearer">Bearer Token (Authorization: Bearer {key})</option>
+                <option value="query_param">Query Parameter (?apiKey={key})</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-slate-300 font-medium mb-1">Custom API Base URL (Optional)</label>
+              <input id="cfg-base-url" type="text" placeholder="https://restcountries.com/v3.1" value="https://restcountries.com/v3.1"
+                class="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white">
+            </div>
+          </div>
+
+          <button onclick="saveConfiguration()" class="w-full bg-cyan-600 hover:bg-cyan-500 text-white font-semibold py-2.5 rounded-lg text-sm transition">
+            Save Configuration
+          </button>
+        </div>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="border-t border-slate-800/80 bg-[#070b12] py-4 px-6 text-center text-xs text-slate-500">
+    CacheOpti Performance Engineering & Observability Studio &bull; Built with Python & Modern Web Primitives
+  </footer>
+
+  <!-- Application Logic -->
+  <script src="app.js"></script>
+</body>
+</html>
